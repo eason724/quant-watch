@@ -1,0 +1,104 @@
+{
+ "updated": "2026-11-08 02:58:24",
+ "quotes": [
+  {
+   "symbol": "510300",
+   "secid": "1.510300",
+   "name": "沪深300ETF华泰柏瑞",
+   "price": 4.124,
+   "pct_chg": -1.69,
+   "prev_close": 4.195,
+   "time": "2026-11-08 02:58:23"
+  },
+  {
+   "symbol": "510500",
+   "secid": "1.510500",
+   "name": "中证500ETF南方",
+   "price": 6.629,
+   "pct_chg": -2.28,
+   "prev_close": 6.784,
+   "time": "2026-11-08 02:58:23"
+  },
+  {
+   "symbol": "159915",
+   "secid": "0.159915",
+   "name": "创业板ETF易方达",
+   "price": 2.48,
+   "pct_chg": -4.02,
+   "prev_close": 2.584,
+   "time": "2026-11-08 02:58:23"
+  },
+  {
+   "symbol": "518880",
+   "secid": "1.518880",
+   "name": "黄金ETF华安",
+   "price": 8.253,
+   "pct_chg": -1.98,
+   "prev_close": 8.42,
+   "time": "2026-11-08 02:58:23"
+  },
+  {
+   "symbol": "600519",
+   "secid": "1.600519",
+   "name": "贵州茅台",
+   "price": 1453.0,
+   "pct_chg": 0.07,
+   "prev_close": 1452.0,
+   "time": "2026-11-08 02:58:23"
+  },
+  {
+   "symbol": "SPY",
+   "secid": "107.SPY",
+   "name": "标普500ETF-SPDR",
+   "price": 735.29,
+   "pct_chg": 0.31,
+   "prev_close": 733.0,
+   "time": "2026-11-08 02:58:23"
+  },
+  {
+   "symbol": "QQQ",
+   "secid": "105.QQQ",
+   "name": "纳斯达克100ETF-Invesco",
+   "price": 656.1,
+   "pct_chg": 1.4,
+   "prev_close": 647.05,
+   "time": "2026-11-08 02:58:23"
+  }
+ ],
+ "strategies": [
+  {
+   "name": "双均线·510300",
+   "target": {
+    "510300": 0.0
+   },
+   "reason": "MA10=4.130 ↓ MA30=4.288"
+  },
+  {
+   "name": "动量轮动·ETF池",
+   "target": {},
+   "reason": "池内标的动量全部走弱，空仓回避"
+  },
+  {
+   "name": "双均线·SPY",
+   "target": {
+    "SPY": 0.0
+   },
+   "reason": "MA10=757.397 ↓ MA30=765.899"
+  }
+ ],
+ "account": {
+  "capital": 100000.0,
+  "cash": 100000.0,
+  "equity": 100000.0,
+  "total_return": 0.0,
+  "positions": [],
+  "equity_history": [
+   {
+    "date": "2026-11-08",
+    "equity": 100000.0
+   }
+  ]
+ },
+ "signals_today": [],
+ "signals_recent": []
+}
