@@ -61,7 +61,11 @@ footer{margin-top:26px;text-align:center;font-size:12px;color:var(--sub)}
 .empty{color:var(--sub);font-size:13px;padding:14px 0;text-align:center}
 
 /* ---- 自选决策台 ---- */
-.addbar{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+.ctrlbar{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-top:16px}
+.ctrl{font-size:13.5px;color:var(--ink);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ctrl select{font-size:13px;padding:5px 8px}
+.ctrl .muted{margin-left:auto;font-size:12px}
+.addbar{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
 .addbar input{flex:1;min-width:180px;font:inherit;padding:10px 14px;border:1px solid var(--line);
   border-radius:10px;background:#fff}
 .addbar button{font:inherit;font-weight:600;padding:10px 22px;border:none;border-radius:10px;
@@ -87,9 +91,14 @@ footer{margin-top:26px;text-align:center;font-size:12px;color:var(--sub)}
   border-radius:6px;background:none;cursor:pointer}
 .wc-re:hover{background:var(--brand);color:#fff}
 .wc-sigs{margin-top:10px}
+.wc-overall{background:#f2f6fa;border-left:4px solid var(--brand);border-radius:6px;
+  padding:8px 12px;margin-top:10px;font-size:13.5px}
+.wc-oa-line .up{color:var(--up)} .wc-oa-line .down{color:var(--down)}
 .wc-sig{display:flex;align-items:baseline;gap:8px;padding:6px 0;flex-wrap:wrap;
   border-bottom:1px dashed #eef1f5;font-size:13.5px}
 .wc-sig:last-child{border-bottom:none}
+.wc-adv{flex-basis:100%;font-size:12.5px;color:#33475b;background:#fafbfd;
+  border-radius:6px;padding:5px 9px;line-height:1.55}
 .wc-tag{display:inline-block;font-size:11.5px;padding:1px 9px;border-radius:9px;font-weight:600}
 .wc-ret{margin-left:auto;font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums}
 .wc-chart{width:100%;height:230px;margin-top:6px}
@@ -131,11 +140,29 @@ footer{margin-top:26px;text-align:center;font-size:12px;color:var(--sub)}
 
   <!-- ============ 自选决策台 ============ -->
   <section id="tab-watch">
+    <div class="ctrlbar">
+      <div class="ctrl">
+        分析周期
+        <select id="kltSel">
+          <option value="101">日线</option>
+          <option value="60">60分钟</option>
+          <option value="30">30分钟</option>
+        </select>
+        回测跨度
+        <select id="spanSel">
+          <option value="1m">近1月</option>
+          <option value="3m">近3月</option>
+          <option value="1y">近1年</option>
+          <option value="3y">近3年</option>
+        </select>
+        <span class="muted" id="rtTimer"></span>
+      </div>
+    </div>
     <div class="addbar">
       <input id="addInput" placeholder="输入代码添加自选，如 600519 / 510300 / AAPL / SPY" maxlength="16">
       <button id="addBtn">添加</button>
     </div>
-    <div class="addhint">A股填 6 位代码；美股填字母代码（自动识别纳斯达克/纽交所/美交所）。自选保存在本设备浏览器里。</div>
+    <div class="addhint">A股填 6 位代码；美股填字母代码（自动识别纳斯达克/纽交所/美交所）。自选与参数保存在本设备浏览器里。</div>
     <div class="poolmom" id="poolMom"></div>
     <div id="watchCards"></div>
     <div class="card" id="watchEmpty" style="display:none"><div class="empty">还没有自选 — 在上方输入代码添加</div></div>
