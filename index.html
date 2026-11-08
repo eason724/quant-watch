@@ -102,6 +102,7 @@ footer{margin-top:26px;text-align:center;font-size:12px;color:var(--sub)}
 .acc-form{display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:14px}
 .acc-form label{display:flex;align-items:center;gap:6px}
 .acc-form input{width:110px;font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:8px}
+.acc-form input#accSymInput{width:150px}
 .acc-form select{font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff}
 .acc-form button{font:inherit;font-weight:600;padding:8px 18px;border:none;border-radius:8px;
   background:var(--brand);color:#fff;cursor:pointer}
@@ -134,7 +135,7 @@ footer{margin-top:26px;text-align:center;font-size:12px;color:var(--sub)}
     <div class="updated"><span class="dot" id="liveDot"></span><span id="liveText">行情加载中…</span>
       &nbsp;·&nbsp;数据快照 <span id="snapTime">—</span></div>
     <div class="kpis">
-      <div class="kpi"><div class="k">官方模拟盘总资产</div><div class="v" id="kEquity">—</div></div>
+      <div class="kpi"><div class="k" id="kLabel1">模拟盘总资产</div><div class="v" id="kEquity">—</div></div>
       <div class="kpi"><div class="k">累计收益</div><div class="v" id="kRet">—</div></div>
       <div class="kpi"><div class="k">现金仓位</div><div class="v" id="kCash">—</div></div>
     </div>
@@ -178,34 +179,21 @@ footer{margin-top:26px;text-align:center;font-size:12px;color:var(--sub)}
     <div class="card" id="watchEmpty" style="display:none"><div class="empty">还没有自选 — 在上方输入代码添加</div></div>
   </section>
 
-  <!-- ============ 官方模拟盘 ============ -->
+  <!-- ============ 模拟盘 ============ -->
   <section id="tab-live" style="display:none">
-    <div class="card full" id="myAccount"><h2>我的模拟盘</h2><div class="empty">加载中…</div></div>
+    <div class="ctrlbar">
+      <div class="ctrl"><span id="rtTimer2"></span></div>
+    </div>
+    <div class="card full" id="myAccount" style="margin-top:12px"><h2>我的模拟盘</h2><div class="empty">加载中…</div></div>
     <div class="grid" style="margin-top:16px">
-      <div class="card full" style="padding:10px 18px">
-        <span class="tag">官方演示账户</span>
-        <span class="muted" style="font-size:12.5px">固定 ¥100,000 本金、固定三个策略，由系统每个交易日小时级自动跟进 — 用来对照你自己的模拟盘</span>
-      </div>
       <div class="card">
         <h2>实时行情 <span class="muted" style="font-size:11px;font-weight:400" id="quoteMode"></span></h2>
         <table><thead><tr><th>标的</th><th class="num">现价</th><th class="num">涨跌幅</th></tr></thead>
           <tbody id="quoteBody"><tr><td colspan="3" class="empty">加载中…</td></tr></tbody></table>
       </div>
       <div class="card">
-        <h2>策略信号（每日收盘口径）</h2>
-        <div id="sigBody"><div class="empty">加载中…</div></div>
-      </div>
-      <div class="card">
-        <h2>模拟盘持仓</h2>
-        <div id="posBody"><div class="empty">加载中…</div></div>
-      </div>
-      <div class="card">
-        <h2>模拟盘资产曲线</h2>
-        <div id="accChart" class="chart"></div>
-      </div>
-      <div class="card full">
-        <h2>信号与模拟成交记录</h2>
-        <div id="histBody"><div class="empty">暂无记录</div></div>
+        <h2>官方演示账户</h2>
+        <div id="officialLine"><div class="empty">加载中…</div></div>
       </div>
     </div>
   </section>
@@ -251,7 +239,6 @@ function switchTab(name){
   document.getElementById("tab-live").style.display = name === "live" ? "" : "none";
   document.getElementById("tab-bt").style.display = name === "bt" ? "" : "none";
   if (name === "live"){
-    if (STATE) initAcc();       // 惰性初始化，避免隐藏容器下 canvas 尺寸为 0
     refreshMyAccount();         // 我的模拟盘：每次进入该页跟进到最新
   }
   if (name === "bt" && BT) initBt();
@@ -266,8 +253,7 @@ async function boot(){
     ]);
     STATE = s; BT = b;
     document.getElementById("snapTime").textContent = s.updated || "—";
-    renderAccount(); renderQuotes(s.quotes, true); renderSignals(); renderPositions();
-    renderHistory(); renderBacktestMeta(); renderBtTable();
+    renderQuotes(s.quotes, true); renderOfficial(); renderBacktestMeta(); renderBtTable();
     document.getElementById("feesNote").textContent =
       (b.fees_note || "") + "。回测区间 " + b.start + " 起，初始资金 " + money(b.capital) + "。";
   }catch(e){
@@ -276,17 +262,29 @@ async function boot(){
   }
   refreshLive();
   setInterval(refreshLive, 30000);
-  initWatchTab();   // 自选决策台（app.js）
+  initWatchTab();       // 自选决策台（app.js）
+  refreshMyAccount();   // 首屏就把 header KPI 初始化（官方/我的账户）
 }
 
-function renderAccount(){
-  const a = STATE.account;
+/* header KPI：优先显示"我的模拟盘"（app.js 在账户跟随后回调），否则显示官方演示账户 */
+function setHeaderKPI(label, equity, ret, cash){
+  document.getElementById("kLabel1").textContent = label;
   const el = document.getElementById("kEquity");
-  el.textContent = money(a.equity);
-  const ret = document.getElementById("kRet");
-  ret.textContent = fmtPct(a.total_return);
-  ret.className = "v " + cls(a.total_return);
-  document.getElementById("kCash").textContent = money(a.cash);
+  el.textContent = money(equity);
+  const r = document.getElementById("kRet");
+  r.textContent = fmtPct(ret);
+  r.className = "v " + cls(ret);
+  document.getElementById("kCash").textContent = money(cash);
+}
+
+function renderOfficial(){
+  const a = STATE.account;
+  const flat = !a.positions || !a.positions.length;
+  document.getElementById("officialLine").innerHTML =
+    `<div class="sig"><div class="t">${money(a.equity)} <span class="${cls(a.total_return)}">${fmtPct(a.total_return)}</span>
+      <span class="muted" style="font-size:12.5px">（固定 ¥${Number(a.capital).toLocaleString()} 本金）</span></div>
+      <div class="why">${flat ? "当前空仓观望 —— 策略未给出买入信号，现金原封不动，所以这条线不会天天动；出信号后会自动开仓并记录。" : "持仓 " + a.positions.map(p => p.name).join("、")}</div>
+      <div class="why">跟进时间 ${STATE.updated} · 每个交易日小时级自动跟进 · 想看"会动的"请开上面「我的模拟盘」</div></div>`;
 }
 
 /* —— 实时行情：浏览器直连东财（30s 轮询），失败回落到部署快照 —— */
@@ -307,7 +305,6 @@ async function refreshLive(){
       renderQuotes(live, false);
       txt.textContent = "实时行情 · 每 30 秒刷新 · " + new Date().toLocaleTimeString("zh-CN");
       dot.classList.remove("off");
-      renderPositions();
     }
   }catch(e){
     txt.textContent = "实时接口不可达，显示部署时快照";
@@ -325,48 +322,6 @@ function renderQuotes(list, snap){
     return `<tr><td>${q.name || ""} <span class="muted" style="font-size:12px">${q.symbol}</span></td>
       <td class="num">${px}</td><td class="num ${cls(q.pct_chg)}">${pct}</td></tr>`;
   }).join("");
-}
-
-function renderSignals(){
-  const box = document.getElementById("sigBody");
-  const rows = (STATE.strategies || []).map(s => {
-    const tgt = Object.entries(s.target || {}).map(([k, v]) => `${k} ${Math.round(v * 100)}%`).join("、") || "空仓观望";
-    return `<div class="sig"><div class="t">${s.name}</div>
-      <div class="tgt">目标仓位：<b>${tgt}</b></div>
-      <div class="why">${s.reason || ""}</div></div>`;
-  }).join("");
-  box.innerHTML = rows || '<div class="empty">暂无策略</div>';
-}
-
-function renderPositions(){
-  const a = STATE.account;
-  const box = document.getElementById("posBody");
-  if(!a.positions || !a.positions.length){
-    box.innerHTML = '<div class="empty">当前空仓（策略未给出持仓信号）</div>';
-    return;
-  }
-  box.innerHTML = '<div style="overflow-x:auto"><table><thead><tr><th>标的</th><th class="num">数量</th>' +
-    '<th class="num">成本</th><th class="num">现价</th><th class="num">市值</th><th class="num">占比</th></tr></thead><tbody>' +
-    a.positions.map(p => {
-      const px = p.price == null ? "—" : Number(p.price).toLocaleString("zh-CN", {maximumFractionDigits: 4});
-      return `<tr><td>${p.name} <span class="muted" style="font-size:12px">${p.symbol}</span></td>
-        <td class="num">${p.shares.toLocaleString()}</td><td class="num">${p.avg_cost}</td>
-        <td class="num">${px}</td><td class="num">${money(p.value)}</td><td class="num">${p.pct}%</td></tr>`;
-    }).join("") + "</tbody></table></div>";
-}
-
-function renderHistory(){
-  const box = document.getElementById("histBody");
-  const list = STATE.signals_recent || [];
-  if(!list.length){ box.innerHTML = '<div class="empty">暂无记录 — 出现调仓信号时会记录在这里</div>'; return; }
-  box.innerHTML = '<div style="overflow-x:auto"><table><thead><tr><th>时间</th><th>方向</th><th>标的</th>' +
-    '<th class="num">数量</th><th class="num">价格</th><th>策略</th><th class="muted">依据</th></tr></thead><tbody>' +
-    list.map(t => `<tr><td class="muted" style="font-size:12.5px">${t.time}</td>
-      <td class="${t.side === "买入" ? "up" : "down"}">${t.side}</td>
-      <td>${t.name || t.symbol}</td><td class="num">${t.shares.toLocaleString()}</td>
-      <td class="num">${t.price}</td><td><span class="tag">${t.strategy}</span></td>
-      <td class="muted" style="font-size:12.5px">${t.reason || ""}</td></tr>`).join("") +
-    "</tbody></table></div>";
 }
 
 /* ---- 回测报告 tab ---- */
@@ -430,30 +385,6 @@ function drawBt(){
     series
   }, true);
 }
-function initAcc(){
-  if (!accInited){
-    accChart = echarts.init(document.getElementById("accChart"));
-    const a = STATE.account;
-    const hist = a.equity_history || [];
-    accChart.setOption({
-      grid: {left: 62, right: 64, top: 20, bottom: 40},
-      tooltip: {trigger: "axis", valueFormatter: v => money(v)},
-      xAxis: {type: "category", data: hist.map(h => h.date), axisLabel: {fontSize: 11}},
-      yAxis: {type: "value", scale: true, axisLabel: {fontSize: 11,
-        formatter: v => (v / 10000).toFixed(1) + "万"}},
-      series: [{name: "总资产", type: "line", showSymbol: true, symbolSize: 6,
-        data: hist.map(h => h.equity), lineStyle: {width: 2.2, color: "#1F4E79"},
-        itemStyle: {color: "#1F4E79"},
-        markLine: {silent: true, symbol: "none", lineStyle: {type: "dashed", color: "#8a97a5"},
-          data: [{yAxis: a.capital, label: {formatter: "初始资金", fontSize: 10}}]}}
-      ]
-    }, true);
-    accInited = true;
-  } else {
-    accChart.resize();
-  }
-}
-
 boot();
 </script>
 </body>

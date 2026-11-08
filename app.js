@@ -17,11 +17,21 @@ function guessSecids(sym) {
   return ["105.", "106.", "107."].map(m => m + s);   // 美股: 纳斯达克/纽交所/美交所
 }
 
+async function fetchWithTimeout(url, ms = 8000) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), ms);
+  try {
+    return await fetch(url, { cache: "no-store", signal: ctl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /* klt: 101=日线, 60/30=分钟线; lmt=根数(含预热缓冲) */
 async function fetchKlines(secid, klt, lmt) {
   const url = `${KLINE_URL}?secid=${encodeURIComponent(secid)}` +
     `&fields1=f1,f2,f3&fields2=f51,f52,f53,f54,f55,f56,f57&klt=${klt}&fqt=1&lmt=${lmt}&end=20500101`;
-  const j = await (await fetch(url, { cache: "no-store" })).json();
+  const j = await (await fetchWithTimeout(url)).json();
   const lines = (j && j.data && j.data.klines) || [];
   return lines.map(ln => {
     const [d, o, c, h, l] = ln.split(",");
@@ -31,13 +41,53 @@ async function fetchKlines(secid, klt, lmt) {
 
 async function fetchRT(secids) {
   if (!secids.length) return [];
-  const j = await (await fetch(`${RT_URL}?fltt=2&fields=f2,f3,f12,f14&secids=${secids.join(",")}`,
-    { cache: "no-store" })).json();
+  const j = await (await fetchWithTimeout(
+    `${RT_URL}?fltt=2&fields=f2,f3,f12,f14&secids=${secids.join(",")}`)).json();
   return ((j.data && j.data.diff) || []).map(d => ({
     symbol: d.f12, name: d.f14,
     price: typeof d.f2 === "number" ? d.f2 : null,
     pct: typeof d.f3 === "number" ? d.f3 : null,
   }));
+}
+
+/* ---------- 页内提示（替代 alert/confirm，不阻塞页面） ---------- */
+
+function toast(msg, ms = 3200) {
+  let box = document.getElementById("toastBox");
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "toastBox";
+    box.style.cssText = "position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:9999;" +
+      "display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none";
+    document.body.appendChild(box);
+  }
+  const t = document.createElement("div");
+  t.style.cssText = "background:rgba(28,39,51,.94);color:#fff;padding:10px 18px;border-radius:10px;" +
+    "font-size:14px;max-width:86vw;box-shadow:0 6px 22px rgba(0,0,0,.25);line-height:1.5";
+  t.textContent = msg;
+  box.appendChild(t);
+  setTimeout(() => t.remove(), ms);
+}
+
+function askConfirm(msg) {
+  return new Promise(resolve => {
+    let box = document.getElementById("confirmBox");
+    if (box) box.remove();
+    box = document.createElement("div");
+    box.id = "confirmBox";
+    box.style.cssText = "position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.42);" +
+      "display:flex;align-items:center;justify-content:center";
+    box.innerHTML = `<div style="background:#fff;border-radius:12px;padding:20px 22px;max-width:88vw;width:340px">
+      <div style="font-size:14.5px;line-height:1.6;margin-bottom:16px">${msg}</div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button id="cfmNo" style="font:inherit;padding:8px 18px;border:1px solid #dfe6ee;border-radius:8px;background:#fff;cursor:pointer">取消</button>
+        <button id="cfmYes" style="font:inherit;padding:8px 18px;border:none;border-radius:8px;background:#1F4E79;color:#fff;cursor:pointer">确定</button>
+      </div></div>`;
+    document.body.appendChild(box);
+    box.querySelector("#cfmYes").onclick = () => { box.remove(); resolve(true); };
+    box.querySelector("#cfmNo").onclick = () => { box.remove(); resolve(false); };
+    box.onclick = e => { if (e.target === box) { box.remove(); resolve(false); } };
+  });
 }
 
 /* ---------- 视图状态（周期 × 跨度） ---------- */
@@ -313,6 +363,9 @@ async function addSymbol(input) {
   return null;
 }
 
+/* ---------- 渲染竞态防护：周期切换时旧请求不回写 ---------- */
+let renderEpoch = 0;
+
 function cardHTML(item) {
   const p = Object.assign(defaultParams(), loadParams()[item.secid] || {});
   return `
@@ -354,7 +407,8 @@ function overallAdvice(rows) {
     <span class="muted">（看多 ${bulls}/4 · 空仓 ${bears}/4）</span></div>`;
 }
 
-async function renderCard(item) {
+async function renderCard(item, epoch) {
+  if (epoch == null) epoch = renderEpoch;
   const holder = document.getElementById("watchCards");
   const divId = `wc-${cssId(item.secid)}`;
   let card = document.getElementById(divId);
@@ -365,6 +419,7 @@ async function renderCard(item) {
   const bars = SPAN_BARS[VIEW.klt][VIEW.span];
   let kl;
   try { kl = await fetchKlines(item.secid, VIEW.klt, Math.min(bars + BUF, 5000)); } catch (e) { kl = []; }
+  if (epoch !== renderEpoch) return;           // 已切换周期/自选，丢弃过期结果
   if (!kl.length) {
     sigBox.innerHTML = '<div class="empty">该标的取不到数据（检查代码/市场）</div>';
     return;
@@ -416,13 +471,14 @@ async function renderCard(item) {
 }
 
 async function renderWatchlist() {
+  const epoch = ++renderEpoch;
   const list = loadList();
   const holder = document.getElementById("watchCards");
   document.getElementById("watchEmpty").style.display = list.length ? "none" : "";
   const existing = new Set(list.map(i => `wc-${cssId(i.secid)}`));
   holder.querySelectorAll(".watch-card").forEach(c => { if (!existing.has(c.id)) c.remove(); });
-  await Promise.all(list.map(renderCard));
-  renderPoolMomentum();
+  await Promise.all(list.map(item => renderCard(item, epoch)));
+  if (epoch === renderEpoch) renderPoolMomentum();
 }
 
 /* 自选池动量排序横幅（固定日线20日口径） */
@@ -473,39 +529,40 @@ async function refreshWatchRT() {
 
 setInterval(() => {
   rtCountdown -= 1;
-  const el = document.getElementById("rtTimer");
-  if (el) {
+  const els = document.querySelectorAll("#rtTimer, #rtTimer2");
+  if (els.length) {
     const st = marketStatus();
-    el.innerHTML = `A股${st.cn} · 美股${st.us} · 实时价格 ${rtCountdown}s 后刷新` +
-      `（休市时价格停在最后成交价，属正常）`;
+    const txt = `A股${st.cn} · 美股${st.us} · 实时价格 ${rtCountdown}s 后刷新（休市时价格停在最后成交价，属正常）`;
+    els.forEach(el => el.innerHTML = txt);
   }
 }, 1000);
 
 /* ---------- 事件绑定 ---------- */
 
 function bindWatchEvents() {
-  const addBtn = document.getElementById("addBtn");
-  const addInput = document.getElementById("addInput");
   async function doAdd() {
+    const addInput = document.getElementById("addInput");
+    const addBtn = document.getElementById("addBtn");
     const v = addInput.value.trim();
     if (!v) return;
     addBtn.disabled = true; addBtn.textContent = "识别中…";
     const item = await addSymbol(v);
     addBtn.disabled = false; addBtn.textContent = "添加";
     addInput.value = "";
-    if (!item) { alert("没找到该标的：请检查代码（A股6位数字 / 美股如 SPY、AAPL）"); return; }
+    if (!item) { toast("没找到该标的：请检查代码（A股6位数字 / 美股如 SPY、AAPL）"); return; }
     const list = loadList();
-    if (list.some(x => x.secid === item.secid)) { alert("已在自选中"); return; }
+    if (list.some(x => x.secid === item.secid)) { toast("该标的已在自选中"); return; }
     list.push(item); saveList(list);
     renderWatchlist();
   }
-  addBtn.addEventListener("click", doAdd);
-  addInput.addEventListener("keydown", e => { if (e.key === "Enter") doAdd(); });
+  window.__doAdd = doAdd;
 
-  document.getElementById("watchCards").addEventListener("click", e => {
+  // 全局事件委托：卡片重渲染后按钮永远有效
+  document.addEventListener("click", async e => {
+    if (e.target.id === "addBtn") { doAdd(); return; }
     const del = e.target.closest("[data-del]");
     if (del) {
-      if (!confirm("从自选中移除？")) return;
+      if (!await askConfirm("从自选中移除该标的？")) return;
       saveList(loadList().filter(x => x.secid !== del.dataset.del));
       renderWatchlist();
       return;
@@ -518,24 +575,55 @@ function bindWatchEvents() {
         if (!isNaN(v) && v > 0) p[inp.dataset.p] = v;
       });
       const all = loadParams(); all[re.dataset.re] = p; saveParams(all);
+      toast("已按新参数重算");
       renderWatchlist();
+      return;
     }
+    if (e.target.id === "accOpen") { toast("正在开通…"); openAccount(); return; }
+    if (e.target.id === "accReset") {
+      if (!await askConfirm("重置我的模拟盘？清空后可重新设置。")) return;
+      localStorage.removeItem(ACC_KEY);
+      accChartObj && accChartObj.dispose(); accChartObj = null;
+      refreshMyAccount();
+    }
+  });
+  document.addEventListener("keydown", e => {
+    if (e.target.id === "addInput" && e.key === "Enter") doAdd();
+  });
+  document.addEventListener("change", e => {
+    if (e.target.id === "kltSel" || e.target.id === "spanSel") onViewChange();
   });
 
   // 周期/跨度切换
   const kltSel = document.getElementById("kltSel"), spanSel = document.getElementById("spanSel");
   kltSel.value = String(VIEW.klt); spanSel.value = VIEW.span;
-  const onViewChange = () => {
-    VIEW = { klt: +kltSel.value, span: spanSel.value };
-    saveView(VIEW);
-    Object.keys(charts).forEach(k => { charts[k].dispose(); delete charts[k]; });
-    document.getElementById("watchCards").innerHTML = "";
-    renderWatchlist();
-    accChartObj = null; accInitedPage = false;
-    refreshMyAccount();          // 我的模拟盘跟随分析周期重算
-  };
-  kltSel.addEventListener("change", onViewChange);
-  spanSel.addEventListener("change", onViewChange);
+}
+function onViewChange() {
+  const kltSel = document.getElementById("kltSel"), spanSel = document.getElementById("spanSel");
+  VIEW = { klt: +kltSel.value, span: spanSel.value };
+  saveView(VIEW);
+  Object.keys(charts).forEach(k => { charts[k].dispose(); delete charts[k]; });
+  document.getElementById("watchCards").innerHTML = "";
+  accChartObj && accChartObj.dispose(); accChartObj = null;
+  renderWatchlist();
+  refreshMyAccount();          // 我的模拟盘跟随分析周期重算
+}
+
+/* ---------- 我的模拟盘：开户 ---------- */
+
+function openAccount() {
+  const cap = parseFloat(document.getElementById("accCap").value);
+  const secid = document.getElementById("accSym").value;
+  const strategy = document.getElementById("accStrat").value;
+  const span = document.getElementById("accSpan").value;
+  if (!secid) { toast("请先在自选决策台添加标的，再开模拟盘"); return; }
+  if (!(cap >= 1000)) { toast("初始资金至少 1000 元"); return; }
+  const item = loadList().find(x => x.secid === secid);
+  saveAccount({ capital: cap, secid, symbol: item.symbol, name: item.name,
+    strategy, span, created: new Date().toLocaleString("zh-CN") });
+  accChartObj && accChartObj.dispose(); accChartObj = null;
+  refreshMyAccount();
+  toast("模拟盘已开通，之后每次打开页面都会自动跟进最新行情");
 }
 
 function initWatchTab() {
@@ -559,9 +647,12 @@ function renderAccountForm() {
     <label>策略
       <select id="accStrat">
         <option value="ma">双均线</option><option value="mom">动量</option>
-        <option value="rsi">均值回归</option><option value="grid">网格</option>
+        <option value="rsi" selected>均值回归</option><option value="grid">网格</option>
       </select></label>
-    <label>标的 <select id="accSym">${opts || '<option value="">先在自选决策台添加标的</option>'}</select></label>
+    <label>标的代码
+      <input id="accSymInput" placeholder="如 510300 / 600519 / SPY" style="width:150px" maxlength="16"></label>
+    <label>或从自选选
+      <select id="accSym"><option value="">（自选列表）</option>${opts}</select></label>
     <label>从何时开始
       <select id="accSpan">
         <option value="1m">1周前</option><option value="3m" selected>3个月前</option>
@@ -572,7 +663,31 @@ function renderAccountForm() {
   </div>`;
 }
 
-function renderMyAccount(acc, kl, bt, target) {
+async function openAccount() {
+  const cap = parseFloat(document.getElementById("accCap").value);
+  const input = document.getElementById("accSymInput").value.trim();
+  const selVal = document.getElementById("accSym").value;
+  const strategy = document.getElementById("accStrat").value;
+  const span = document.getElementById("accSpan").value;
+  if (!(cap >= 1000)) { toast("初始资金至少 1000 元", 5000); return; }
+  let item = null;
+  if (input) {
+    item = await addSymbol(input);   // 手输代码：自动识别市场与名称
+    if (!item) { toast(`没找到「${input}」：请检查代码（A股6位数字 / 美股字母）`, 5000); return; }
+    const list = loadList();
+    if (!list.some(x => x.secid === item.secid)) { list.push(item); saveList(list); }
+  } else if (selVal) {
+    item = loadList().find(x => x.secid === selVal);
+  }
+  if (!item) { toast("请填标的代码，或从右侧自选下拉里选一个", 5000); return; }
+  saveAccount({ capital: cap, secid: item.secid, symbol: item.symbol, name: item.name,
+    strategy, span, created: new Date().toLocaleString("zh-CN") });
+  accChartObj && accChartObj.dispose(); accChartObj = null;
+  refreshMyAccount();
+  toast("模拟盘已开通，之后每次打开页面都会自动跟进最新行情");
+}
+
+function renderMyAccount(acc, kl, bt, target, tradesAll) {
   const eq = bt.equity;
   const ret = eq[eq.length - 1] / acc.capital - 1;
   const pos = bt.shares > 0 ? {
@@ -582,7 +697,11 @@ function renderMyAccount(acc, kl, bt, target) {
   } : null;
   const from = kl[Math.max(0, kl.length - SPAN_BARS[VIEW.klt][acc.span])]?.date || kl[0]?.date;
   const stratName = { ma: "双均线", mom: "动量", rsi: "均值回归", grid: "网格" }[acc.strategy];
-  const trades = (bt.trades || []).slice(-8).reverse();
+  const trades = (tradesAll || []).slice(-8).reverse();
+  // 高价股买不起提示：A股一手=100股，若全程未交易且一手成本>本金，明确告知原因
+  const isCNLot = /^\d{6}$/.test(codeOf(acc.symbol));
+  const lotCost = isCNLot ? 100 * kl[kl.length - 1].close : kl[kl.length - 1].close;
+  const cantAfford = isCNLot && !tradesAll?.length && lotCost > acc.capital;
   return `
   <div class="acc-summary">
     <div><span class="k">总资产</span><b>${money(eq[eq.length - 1])}</b></div>
@@ -591,6 +710,9 @@ function renderMyAccount(acc, kl, bt, target) {
     ${pos ? `<div><span class="k">持仓</span><b>${pos.shares.toLocaleString()} 股 @ ${pos.avgCost.toFixed(3)}</b></div>` :
       '<div><span class="k">持仓</span><b class="muted">空仓</b></div>'}
   </div>
+  ${cantAfford ? `<div style="background:#fdf2f0;border-left:4px solid var(--up);border-radius:6px;
+    padding:8px 12px;margin-top:8px;font-size:13px">该股最小一手（100 股）约需 <b>¥${Math.round(lotCost).toLocaleString()}</b>，
+    超出了你 ${money(acc.capital)} 的本金，所以策略一直无法建仓。建议：换低价格标的（如 ETF）、加大初始资金，或改用美股（1 股即可交易）。</div>` : ""}
   <div class="muted" style="font-size:12.5px;margin:6px 0 10px">
     ${acc.capital.toLocaleString()} 元本金 · ${stratName} · ${acc.name} · 从 ${from} 按 ${KLTS[VIEW.klt]}线模拟，
     每次打开本页自动跟进到最新一根K线（同规则：开盘成交、含费用滑点、A股涨跌停约束）。
@@ -602,7 +724,7 @@ function renderMyAccount(acc, kl, bt, target) {
       <td class="${t.side === "买入" ? "up" : "down"}">${t.side}</td>
       <td class="num">${t.shares.toLocaleString()}</td><td class="num">${t.price}</td>
       <td class="num">${t.value.toLocaleString()}</td><td class="num">${t.fee}</td></tr>`).join("")}</tbody>
-  </table></div>` : '<div class="empty">开户以来尚无调仓（信号未变化）</div>'}`;
+  </table></div>` : '<div class="empty">开户以来还没有调仓 — 策略信号出现变化时会自动成交并记在这里</div>'}`;
 }
 
 function fmtAccPct(v) { return (v > 0 ? "+" : "") + (v * 100).toFixed(2) + "%"; }
@@ -610,11 +732,16 @@ function fmtAccPct(v) { return (v > 0 ? "+" : "") + (v * 100).toFixed(2) + "%"; 
 async function refreshMyAccount() {
   const box = document.getElementById("myAccount");
   if (!box) return;
+  accChartObj && accChartObj.dispose(); accChartObj = null;   // innerHTML 重建前先释放旧图
   const acc = loadAccount();
   if (!acc) {
     box.innerHTML = "<h2>我的模拟盘</h2>" + renderAccountForm() +
-      '<div class="muted" style="font-size:12px;margin-top:6px">开户后，系统按你选的策略自动记账：每次打开页面都会跟进最新行情信号，随时可以重置换策略。</div>';
-    bindAccountForm();
+      '<div class="muted" style="font-size:12px;margin-top:6px">开户后，系统按你选的策略自动记账：每次打开页面都会跟进最新行情信号，随时可以重置换策略。开通后顶部三个大数字也会变成你自己的账户。</div>';
+    if (typeof STATE !== "undefined" && STATE) {
+      const a = STATE.account;
+      if (typeof setHeaderKPI === "function")
+        setHeaderKPI("官方演示账户总资产", a.equity, a.total_return, a.cash);
+    }
     return;
   }
   box.innerHTML = '<h2>我的模拟盘</h2><div class="empty">跟进行情中…</div>';
@@ -630,15 +757,12 @@ async function refreshMyAccount() {
   const t = makeTargets(acc.strategy, closes, kl, p);
   const bt = miniBacktest(kl, acc.symbol, t, acc.capital, true);
   box.innerHTML = `<h2 style="display:flex;align-items:center;gap:10px">我的模拟盘
-    <button class="wc-del" id="accReset">重置</button></h2>` + renderMyAccount(acc, kl, bt, t);
+    <button class="wc-del" id="accReset">重置</button></h2>` +
+    renderMyAccount(acc, kl, bt, t, bt.trades || []);
+  if (typeof setHeaderKPI === "function")
+    setHeaderKPI("我的模拟盘总资产", bt.equity[bt.equity.length - 1],
+      bt.equity[bt.equity.length - 1] / acc.capital - 1, bt.cash);
   drawAccChart(kl, bt.equity);
-  const resetBtn = document.getElementById("accReset");
-  if (resetBtn) resetBtn.addEventListener("click", () => {
-    if (confirm("重置我的模拟盘？（清空后可重新设置）")) {
-      localStorage.removeItem(ACC_KEY);
-      refreshMyAccount();
-    }
-  });
 }
 
 function drawAccChart(kl, equity) {
@@ -659,21 +783,4 @@ function drawAccChart(kl, equity) {
         data: [{ yAxis: acc.capital, label: { formatter: "本金", fontSize: 10 } }] } }]
   }, true);
   window.addEventListener("resize", () => accChartObj && accChartObj.resize());
-}
-
-function bindAccountForm() {
-  const btn = document.getElementById("accOpen");
-  if (!btn) return;
-  btn.addEventListener("click", () => {
-    const cap = parseFloat(document.getElementById("accCap").value);
-    const secid = document.getElementById("accSym").value;
-    const strategy = document.getElementById("accStrat").value;
-    const span = document.getElementById("accSpan").value;
-    if (!secid) { alert("请先在自选决策台添加标的"); return; }
-    if (!(cap >= 1000)) { alert("初始资金至少 1000 元"); return; }
-    const item = loadList().find(x => x.secid === secid);
-    saveAccount({ capital: cap, secid, symbol: item.symbol, name: item.name,
-      strategy, span, created: new Date().toLocaleString("zh-CN") });
-    refreshMyAccount();
-  });
 }
