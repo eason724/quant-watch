@@ -99,6 +99,16 @@ footer{margin-top:26px;text-align:center;font-size:12px;color:var(--sub)}
 .wc-sig:last-child{border-bottom:none}
 .wc-adv{flex-basis:100%;font-size:12.5px;color:#33475b;background:#fafbfd;
   border-radius:6px;padding:5px 9px;line-height:1.55}
+.acc-form{display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:14px}
+.acc-form label{display:flex;align-items:center;gap:6px}
+.acc-form input{width:110px;font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:8px}
+.acc-form select{font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.acc-form button{font:inherit;font-weight:600;padding:8px 18px;border:none;border-radius:8px;
+  background:var(--brand);color:#fff;cursor:pointer}
+.acc-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0 4px}
+.acc-summary .k{display:block;font-size:12px;color:var(--sub)}
+.acc-summary b{font-size:17px;font-variant-numeric:tabular-nums}
+@media (max-width:760px){ .acc-summary{grid-template-columns:repeat(2,1fr)} }
 .wc-tag{display:inline-block;font-size:11.5px;padding:1px 9px;border-radius:9px;font-weight:600}
 .wc-ret{margin-left:auto;font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums}
 .wc-chart{width:100%;height:230px;margin-top:6px}
@@ -170,7 +180,12 @@ footer{margin-top:26px;text-align:center;font-size:12px;color:var(--sub)}
 
   <!-- ============ 官方模拟盘 ============ -->
   <section id="tab-live" style="display:none">
-    <div class="grid">
+    <div class="card full" id="myAccount"><h2>我的模拟盘</h2><div class="empty">加载中…</div></div>
+    <div class="grid" style="margin-top:16px">
+      <div class="card full" style="padding:10px 18px">
+        <span class="tag">官方演示账户</span>
+        <span class="muted" style="font-size:12.5px">固定 ¥100,000 本金、固定三个策略，由系统每个交易日小时级自动跟进 — 用来对照你自己的模拟盘</span>
+      </div>
       <div class="card">
         <h2>实时行情 <span class="muted" style="font-size:11px;font-weight:400" id="quoteMode"></span></h2>
         <table><thead><tr><th>标的</th><th class="num">现价</th><th class="num">涨跌幅</th></tr></thead>
@@ -235,7 +250,10 @@ function switchTab(name){
   document.getElementById("tab-watch").style.display = name === "watch" ? "" : "none";
   document.getElementById("tab-live").style.display = name === "live" ? "" : "none";
   document.getElementById("tab-bt").style.display = name === "bt" ? "" : "none";
-  if (name === "live" && STATE) initAcc();       // 惰性初始化，避免隐藏容器下 canvas 尺寸为 0
+  if (name === "live"){
+    if (STATE) initAcc();       // 惰性初始化，避免隐藏容器下 canvas 尺寸为 0
+    refreshMyAccount();         // 我的模拟盘：每次进入该页跟进到最新
+  }
   if (name === "bt" && BT) initBt();
 }
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => switchTab(t.dataset.tab)));

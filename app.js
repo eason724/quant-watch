@@ -185,22 +185,34 @@ function makeTargets(type, closes, kl, p) {
   };
 }
 
+const ACC_KEY = "qw_my_account_v1";
+
+function loadAccount() {
+  try { return JSON.parse(localStorage.getItem(ACC_KEY)); } catch (e) { return null; }
+}
+function saveAccount(a) { localStorage.setItem(ACC_KEY, JSON.stringify(a)); }
+
 /* ---------- 迷你回测（与 Python 引擎同规则） ---------- */
 
+function codeOf(symbol) {          // "510300" / "107.SPY" → "510300" / "SPY"
+  return symbol.includes(".") ? symbol.split(".")[1] : symbol;
+}
+
 function limitPct(symbol) {
-  const code = symbol.split(".")[1] || "";
+  const code = codeOf(symbol);
   if (!/^\d{6}$/.test(code)) return null;
   return /^(300|301|159|588|688|689)/.test(code) ? 20.0 : 10.0;
 }
 
-function miniBacktest(kl, symbol, target) {
-  const isCN = /^\d{6}/.test(symbol.split(".")[1] || "");
+function miniBacktest(kl, symbol, target, cap, collectTrades) {
+  const isCN = /^\d{6}$/.test(codeOf(symbol));
   const fee = isCN
     ? { buy: 0.00005, sell: 0.00005, tax: 0, minFee: 0.5, slip: 0.0005, lot: 100 }
     : { buy: 0, sell: 0, tax: 0, minFee: 0, slip: 0.0002, lot: 1 };
-  const cap = 100000;
+  cap = cap || 100000;
   let cash = cap, shares = 0, avgCost = 0;
   const equity = [];
+  const trades = collectTrades ? [] : null;
   let pending = null;
   const N = kl.length;
   for (let i = 0; i < N; i++) {
@@ -224,6 +236,8 @@ function miniBacktest(kl, symbol, target) {
             cash -= v + f;
             avgCost = (avgCost * shares + v) / (shares + n);
             shares += n;
+            if (trades) trades.push({ date: kl[i].date, side: "买入", shares: n,
+              price: +px.toFixed(4), value: +v.toFixed(2), fee: +f.toFixed(2) });
           }
         } else if (dw < 0 && shares > 0 && !blockedSell) {
           const px = kl[i].open * (1 - fee.slip);
@@ -235,6 +249,8 @@ function miniBacktest(kl, symbol, target) {
             const f = Math.max(fee.minFee, v * fee.sell) + v * fee.tax;
             cash += v - f;
             shares -= n;
+            if (trades) trades.push({ date: kl[i].date, side: "卖出", shares: n,
+              price: +px.toFixed(4), value: +v.toFixed(2), fee: +f.toFixed(2) });
           }
           if (shares === 0) avgCost = 0;
         }
@@ -248,7 +264,7 @@ function miniBacktest(kl, symbol, target) {
   }
   const last = kl[N - 1];
   const finalW = cash + shares * last.close > 0 ? shares * last.close / (cash + shares * last.close) : 0;
-  return { equity, posNow: finalW };
+  return { equity, posNow: finalW, trades, cash, shares, avgCost };
 }
 
 /* ---------- 自选池管理 ---------- */
@@ -515,6 +531,8 @@ function bindWatchEvents() {
     Object.keys(charts).forEach(k => { charts[k].dispose(); delete charts[k]; });
     document.getElementById("watchCards").innerHTML = "";
     renderWatchlist();
+    accChartObj = null; accInitedPage = false;
+    refreshMyAccount();          // 我的模拟盘跟随分析周期重算
   };
   kltSel.addEventListener("change", onViewChange);
   spanSel.addEventListener("change", onViewChange);
@@ -525,4 +543,137 @@ function initWatchTab() {
   renderWatchlist();
   refreshWatchRT();
   setInterval(refreshWatchRT, 30000);
+}
+
+/* ================= 我的模拟盘 ================= */
+
+let accChartObj = null;
+let accInitedPage = false;
+
+function renderAccountForm() {
+  const list = loadList();
+  const opts = list.map(i => `<option value="${i.secid}">${i.name}（${i.symbol}）</option>`).join("");
+  return `
+  <div class="acc-form">
+    <label>初始资金 <input id="accCap" type="number" value="100000" min="1000" step="1000"></label>
+    <label>策略
+      <select id="accStrat">
+        <option value="ma">双均线</option><option value="mom">动量</option>
+        <option value="rsi">均值回归</option><option value="grid">网格</option>
+      </select></label>
+    <label>标的 <select id="accSym">${opts || '<option value="">先在自选决策台添加标的</option>'}</select></label>
+    <label>从何时开始
+      <select id="accSpan">
+        <option value="1m">1周前</option><option value="3m" selected>3个月前</option>
+        <option value="1y">1年前</option>
+      </select></label>
+    <button id="accOpen">开通我的模拟盘</button>
+    <span class="muted" style="font-size:12px">按当前分析周期（${KLTS[VIEW.klt]}）模拟，自动跟进到最新</span>
+  </div>`;
+}
+
+function renderMyAccount(acc, kl, bt, target) {
+  const eq = bt.equity;
+  const ret = eq[eq.length - 1] / acc.capital - 1;
+  const pos = bt.shares > 0 ? {
+    shares: bt.shares, avgCost: bt.avgCost,
+    price: kl[kl.length - 1].close,
+    value: bt.shares * kl[kl.length - 1].close,
+  } : null;
+  const from = kl[Math.max(0, kl.length - SPAN_BARS[VIEW.klt][acc.span])]?.date || kl[0]?.date;
+  const stratName = { ma: "双均线", mom: "动量", rsi: "均值回归", grid: "网格" }[acc.strategy];
+  const trades = (bt.trades || []).slice(-8).reverse();
+  return `
+  <div class="acc-summary">
+    <div><span class="k">总资产</span><b>${money(eq[eq.length - 1])}</b></div>
+    <div><span class="k">累计收益</span><b class="${ret >= 0 ? "up" : "down"}">${fmtAccPct(ret)}</b></div>
+    <div><span class="k">现金</span><b>${money(bt.cash)}</b></div>
+    ${pos ? `<div><span class="k">持仓</span><b>${pos.shares.toLocaleString()} 股 @ ${pos.avgCost.toFixed(3)}</b></div>` :
+      '<div><span class="k">持仓</span><b class="muted">空仓</b></div>'}
+  </div>
+  <div class="muted" style="font-size:12.5px;margin:6px 0 10px">
+    ${acc.capital.toLocaleString()} 元本金 · ${stratName} · ${acc.name} · 从 ${from} 按 ${KLTS[VIEW.klt]}线模拟，
+    每次打开本页自动跟进到最新一根K线（同规则：开盘成交、含费用滑点、A股涨跌停约束）。
+  </div>
+  <div id="myAccChart" class="chart" style="height:230px"></div>
+  ${trades.length ? `<div style="overflow-x:auto;margin-top:10px"><table>
+    <thead><tr><th>时间</th><th>方向</th><th class="num">数量</th><th class="num">价格</th><th class="num">金额</th><th class="num">费用</th></tr></thead>
+    <tbody>${trades.map(t => `<tr><td class="muted" style="font-size:12px">${t.date}</td>
+      <td class="${t.side === "买入" ? "up" : "down"}">${t.side}</td>
+      <td class="num">${t.shares.toLocaleString()}</td><td class="num">${t.price}</td>
+      <td class="num">${t.value.toLocaleString()}</td><td class="num">${t.fee}</td></tr>`).join("")}</tbody>
+  </table></div>` : '<div class="empty">开户以来尚无调仓（信号未变化）</div>'}`;
+}
+
+function fmtAccPct(v) { return (v > 0 ? "+" : "") + (v * 100).toFixed(2) + "%"; }
+
+async function refreshMyAccount() {
+  const box = document.getElementById("myAccount");
+  if (!box) return;
+  const acc = loadAccount();
+  if (!acc) {
+    box.innerHTML = "<h2>我的模拟盘</h2>" + renderAccountForm() +
+      '<div class="muted" style="font-size:12px;margin-top:6px">开户后，系统按你选的策略自动记账：每次打开页面都会跟进最新行情信号，随时可以重置换策略。</div>';
+    bindAccountForm();
+    return;
+  }
+  box.innerHTML = '<h2>我的模拟盘</h2><div class="empty">跟进行情中…</div>';
+  const bars = SPAN_BARS[VIEW.klt][acc.span] || 400;
+  let kl;
+  try { kl = await fetchKlines(acc.secid, VIEW.klt, Math.min(bars + BUF, 5000)); } catch (e) { kl = []; }
+  if (!kl.length) {
+    box.innerHTML = '<h2>我的模拟盘</h2><div class="empty">行情拉取失败，稍后自动重试</div>';
+    return;
+  }
+  const closes = kl.map(k => k.close);
+  const p = Object.assign(defaultParams(), loadParams()[acc.secid] || {});
+  const t = makeTargets(acc.strategy, closes, kl, p);
+  const bt = miniBacktest(kl, acc.symbol, t, acc.capital, true);
+  box.innerHTML = `<h2 style="display:flex;align-items:center;gap:10px">我的模拟盘
+    <button class="wc-del" id="accReset">重置</button></h2>` + renderMyAccount(acc, kl, bt, t);
+  drawAccChart(kl, bt.equity);
+  const resetBtn = document.getElementById("accReset");
+  if (resetBtn) resetBtn.addEventListener("click", () => {
+    if (confirm("重置我的模拟盘？（清空后可重新设置）")) {
+      localStorage.removeItem(ACC_KEY);
+      refreshMyAccount();
+    }
+  });
+}
+
+function drawAccChart(kl, equity) {
+  const el = document.getElementById("myAccChart");
+  if (!el) return;
+  if (!accChartObj) accChartObj = echarts.init(el);
+  const acc = loadAccount();
+  const showFrom = Math.max(0, kl.length - (SPAN_BARS[VIEW.klt][acc.span] || 400));
+  accChartObj.setOption({
+    grid: { left: 60, right: 12, top: 14, bottom: 26 },
+    tooltip: { trigger: "axis", valueFormatter: v => money(v) },
+    xAxis: { type: "category", data: kl.slice(showFrom).map(k => k.date),
+      axisLabel: { fontSize: 10, formatter: v => v.slice(VIEW.klt === 101 ? 0 : 5, VIEW.klt === 101 ? 7 : 10) } },
+    yAxis: { type: "value", scale: true, axisLabel: { fontSize: 10, formatter: v => (v / 10000).toFixed(1) + "万" } },
+    series: [{ type: "line", showSymbol: false, data: equity.slice(showFrom).map(v => +v.toFixed(0)),
+      lineStyle: { width: 2, color: "#1F4E79" }, itemStyle: { color: "#1F4E79" },
+      markLine: { silent: true, symbol: "none", lineStyle: { type: "dashed", color: "#8a97a5" },
+        data: [{ yAxis: acc.capital, label: { formatter: "本金", fontSize: 10 } }] } }]
+  }, true);
+  window.addEventListener("resize", () => accChartObj && accChartObj.resize());
+}
+
+function bindAccountForm() {
+  const btn = document.getElementById("accOpen");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    const cap = parseFloat(document.getElementById("accCap").value);
+    const secid = document.getElementById("accSym").value;
+    const strategy = document.getElementById("accStrat").value;
+    const span = document.getElementById("accSpan").value;
+    if (!secid) { alert("请先在自选决策台添加标的"); return; }
+    if (!(cap >= 1000)) { alert("初始资金至少 1000 元"); return; }
+    const item = loadList().find(x => x.secid === secid);
+    saveAccount({ capital: cap, secid, symbol: item.symbol, name: item.name,
+      strategy, span, created: new Date().toLocaleString("zh-CN") });
+    refreshMyAccount();
+  });
 }
