@@ -13,6 +13,8 @@ jobs:
   refresh:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      TZ: Asia/Shanghai   # 让页面上的“生成时间”显示北京时间
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
