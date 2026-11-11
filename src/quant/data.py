@@ -21,25 +21,36 @@ SESSION.headers.update({
                   "(KHTML, like Gecko) Chrome/126.0 Safari/537.36",
 })
 
-KLINE_URL = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
-REALTIME_URL = "https://push2.eastmoney.com/api/qt/ulist.np/get"
+KLINE_URL = "https://[HOST]/api/qt/stock/kline/get"
+REALTIME_URL = "https://[HOST]/api/qt/ulist.np/get"
 SUGGEST_URL = "https://searchapi.eastmoney.com/api/suggest/get"
 
 # K线字段: 日期,开盘,收盘,最高,最低,成交量,成交额
 KLINE_FIELDS = "f51,f52,f53,f54,f55,f56,f57"
 
+# 东财多线路：主域被限流/拦截时轮换编号子域（对云端 IP 段尤其重要）
+_EM_HOSTS = [
+    "push2his.eastmoney.com",
+    "76.push2his.eastmoney.com",
+    "48.push2his.eastmoney.com",
+    "96.push2his.eastmoney.com",
+    "push2delay.eastmoney.com",
+]
 
-def _get_json(url, params, tries=3, timeout=15):
+
+def _get_json(url, params, tries=5, timeout=15):
     last_err = None
     for k in range(tries):
+        host = _EM_HOSTS[k % len(_EM_HOSTS)]
+        u = url.replace("[HOST]", host)
         try:
-            r = SESSION.get(url, params=params, timeout=timeout)
+            r = SESSION.get(u, params=params, timeout=timeout)
             r.raise_for_status()
             return r.json()
-        except Exception as e:  # 网络抖动重试
+        except Exception as e:  # 网络抖动/限流：换线路退避重试
             last_err = e
-            time.sleep(1.0 + k)
-    raise RuntimeError(f"请求失败 {url}: {last_err}")
+            time.sleep(min(2.0 * (k + 1), 10))
+    raise RuntimeError(f"请求失败（{tries} 次多线路重试后）: {last_err}")
 
 
 _SECID_CACHE: dict | None = None

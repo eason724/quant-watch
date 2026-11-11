@@ -74,7 +74,10 @@ def main():
             failed.append(sc.get("name", sc["type"]))
             print(f"{sc.get('name', sc['type']):<18} ⚠ 跳过：{type(e).__name__}: {str(e)[:80]}")
     if not results:
-        raise SystemExit("所有策略均失败，请检查网络/接口后重试")
+        # 全部失败（如接口临时封禁云端 IP 段）：不更新报告，优雅退出保旧数据，下轮再试
+        print("⚠ 所有策略本轮均失败——保留上一轮报告数据，等待下一轮自动重试")
+        print(f"✅ 保留旧数据继续发布（失败清单: {'、'.join(failed)}）")
+        return
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M")
     xlsx_path = out / f"回测报告_{stamp}.xlsx"
