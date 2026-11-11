@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>观澜量化 · 监控台</title>
+<script src="./echarts.min.js"></script>
+<style>
+:root{
+  --ink:#1c2733; --sub:#5b6b7c; --line:#dfe6ee; --bg:#f4f6f9; --card:#ffffff;
+  --brand:#1F4E79; --brand-2:#2c6ba8; --up:#c8281e; --down:#0a8f4d;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;
+  background:var(--bg);color:var(--ink);font-size:15px;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding:0 16px 48px}
+header{background:linear-gradient(135deg,#173a5c 0%,#1F4E79 55%,#2c6ba8 100%);color:#fff}
+.hd{max-width:1180px;margin:0 auto;padding:22px 16px 0}
+.brand{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.brand h1{font-size:24px;letter-spacing:2px;font-weight:700}
+.brand .en{font-size:12px;opacity:.65;letter-spacing:3px}
+.updated{font-size:12px;opacity:.75;margin-top:6px}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#38d47f;margin-right:5px;
+  animation:pulse 2s infinite}
+.dot.off{background:#ffb02e;animation:none}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px}
+.kpi{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.16);border-radius:10px;padding:10px 14px}
+.kpi .k{font-size:12px;opacity:.72}
+.kpi .v{font-size:20px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
+.kpi .v.red{color:#ff9d94}.kpi .v.green{color:#8fe6b5}
+.tabs{max-width:1180px;margin:0 auto;padding:14px 16px 0;display:flex;gap:6px}
+.tab{flex:1;text-align:center;padding:11px 6px;border-radius:10px 10px 0 0;cursor:pointer;
+  font-size:14.5px;font-weight:600;color:rgba(255,255,255,.75);background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.14);border-bottom:none;user-select:none}
+.tab.on{background:var(--bg);color:var(--brand)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;min-width:0}
+.card h2{font-size:15px;color:var(--brand);font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card h2::before{content:"";width:4px;height:15px;background:var(--brand-2);border-radius:2px;display:inline-block}
+.card.full{grid-column:1/-1}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{font-size:12px;color:var(--sub);font-weight:600;text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:7px 8px;border-bottom:1px solid #edf1f6;font-size:14px;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+td.num,th.num{text-align:right}
+.up{color:var(--up)}.down{color:var(--down)}.muted{color:var(--sub)}
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:9px;background:#eef3f9;color:var(--brand);margin-right:4px}
+.sig{padding:9px 0;border-bottom:1px dashed #e6ebf2}
+.sig:last-child{border-bottom:none}
+.sig .t{font-weight:700}
+.sig .why{font-size:12.5px;color:var(--sub);margin-top:2px}
+.sig .tgt{font-size:13px;margin-top:2px}
+select{font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:8px;color:var(--ink);background:#fff}
+.chart{width:100%;height:300px}
+.dl{display:inline-block;padding:7px 14px;border:1px solid var(--brand);color:var(--brand);border-radius:8px;
+  text-decoration:none;font-size:13px;margin-right:8px}
+.dl:hover{background:var(--brand);color:#fff}
+.note{font-size:12px;color:var(--sub);margin-top:14px;line-height:1.7}
+footer{margin-top:26px;text-align:center;font-size:12px;color:var(--sub)}
+.empty{color:var(--sub);font-size:13px;padding:14px 0;text-align:center}
+
+/* ---- 自选决策台 ---- */
+.ctrlbar{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-top:16px}
+.ctrl{font-size:13.5px;color:var(--ink);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ctrl select{font-size:13px;padding:5px 8px}
+.ctrl .muted{margin-left:auto;font-size:12px}
+.addbar{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.addbar input{flex:1;min-width:180px;font:inherit;padding:10px 14px;border:1px solid var(--line);
+  border-radius:10px;background:#fff}
+.addbar button{font:inherit;font-weight:600;padding:10px 22px;border:none;border-radius:10px;
+  background:var(--brand);color:#fff;cursor:pointer}
+.addbar button:disabled{opacity:.6}
+.addhint{font-size:12px;color:var(--sub);margin-top:6px}
+.poolmom{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 14px;
+  margin-top:12px;font-size:13px;color:var(--sub)}
+.pm{font-weight:700;margin-right:6px}
+.watch-card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:15px 17px;margin-top:14px}
+.wc-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.wc-title{flex:1;min-width:150px}
+.wc-price{text-align:right}
+.wc-px{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+.wc-pct{font-size:13px;margin-left:8px;font-variant-numeric:tabular-nums}
+.wc-del{font-size:12px;color:var(--sub);background:none;border:1px solid var(--line);
+  border-radius:8px;padding:4px 10px;cursor:pointer}
+.wc-del:hover{color:var(--up);border-color:var(--up)}
+.wc-params{font-size:12.5px;color:var(--sub);margin-top:9px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.wc-params input{width:44px;font:inherit;font-size:12.5px;padding:3px 5px;border:1px solid var(--line);
+  border-radius:6px;text-align:center}
+.wc-re{font-size:12px;padding:3px 12px;border:1px solid var(--brand);color:var(--brand);
+  border-radius:6px;background:none;cursor:pointer}
+.wc-re:hover{background:var(--brand);color:#fff}
+.wc-sigs{margin-top:10px}
+.wc-overall{background:#f2f6fa;border-left:4px solid var(--brand);border-radius:6px;
+  padding:8px 12px;margin-top:10px;font-size:13.5px}
+.wc-oa-line .up{color:var(--up)} .wc-oa-line .down{color:var(--down)}
+.wc-sig{display:flex;align-items:baseline;gap:8px;padding:6px 0;flex-wrap:wrap;
+  border-bottom:1px dashed #eef1f5;font-size:13.5px}
+.wc-sig:last-child{border-bottom:none}
+.wc-adv{flex-basis:100%;font-size:12.5px;color:#33475b;background:#fafbfd;
+  border-radius:6px;padding:5px 9px;line-height:1.55}
+.acc-form{display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:14px}
+.acc-form label{display:flex;align-items:center;gap:6px}
+.acc-form input{width:110px;font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:8px}
+.acc-form input#accSymInput{width:150px}
+.acc-form select{font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.acc-form button{font:inherit;font-weight:600;padding:8px 18px;border:none;border-radius:8px;
+  background:var(--brand);color:#fff;cursor:pointer}
+.acc-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0 4px}
+.acc-summary .k{display:block;font-size:12px;color:var(--sub)}
+.acc-summary b{font-size:17px;font-variant-numeric:tabular-nums}
+@media (max-width:760px){ .acc-summary{grid-template-columns:repeat(2,1fr)} }
+.wc-tag{display:inline-block;font-size:11.5px;padding:1px 9px;border-radius:9px;font-weight:600}
+.wc-ret{margin-left:auto;font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums}
+.wc-chart{width:100%;height:230px;margin-top:6px}
+@media (max-width:760px){
+  .grid{grid-template-columns:1fr}
+  .kpis{gap:8px}
+  .kpi .v{font-size:16px}
+  .brand h1{font-size:20px}
+  .card{padding:13px 14px}
+  td,th{padding:6px 5px}
+  td{white-space:normal}
+  td.num,th.num{white-space:nowrap}
+  .chart{height:250px}
+  .tab{font-size:13px;padding:10px 4px}
+  .wc-chart{height:200px}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="hd">
+    <div class="brand"><h1>观澜量化 · 监控台</h1><span class="en">QUANT WATCH</span></div>
+    <div class="updated"><span class="dot" id="liveDot"></span><span id="liveText">行情加载中…</span>
+      &nbsp;·&nbsp;数据快照 <span id="snapTime">—</span></div>
+    <div class="kpis">
+      <div class="kpi"><div class="k" id="kLabel1">模拟盘总资产</div><div class="v" id="kEquity">—</div></div>
+      <div class="kpi"><div class="k">累计收益</div><div class="v" id="kRet">—</div></div>
+      <div class="kpi"><div class="k">现金仓位</div><div class="v" id="kCash">—</div></div>
+    </div>
+    <div class="tabs">
+      <div class="tab on" data-tab="watch">自选决策台</div>
+      <div class="tab" data-tab="live">官方模拟盘</div>
+      <div class="tab" data-tab="bt">回测报告</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- ============ 自选决策台 ============ -->
+  <section id="tab-watch">
+    <div class="ctrlbar">
+      <div class="ctrl">
+        分析周期
+        <select id="kltSel">
+          <option value="101">日线</option>
+          <option value="60">60分钟</option>
+          <option value="30">30分钟</option>
+        </select>
+        回测跨度
+        <select id="spanSel">
+          <option value="1m">近1月</option>
+          <option value="3m">近3月</option>
+          <option value="1y">近1年</option>
+          <option value="3y">近3年</option>
+        </select>
+        <span class="muted" id="rtTimer"></span>
+      </div>
+    </div>
+    <div class="addbar">
+      <input id="addInput" placeholder="输入代码添加自选，如 600519 / 510300 / AAPL / SPY" maxlength="16">
+      <button id="addBtn">添加</button>
+    </div>
+    <div class="addhint">A股填 6 位代码；美股填字母代码（自动识别纳斯达克/纽交所/美交所）。自选与参数保存在本设备浏览器里。</div>
+    <div class="poolmom" id="poolMom"></div>
+    <div id="watchCards"></div>
+    <div class="card" id="watchEmpty" style="display:none"><div class="empty">还没有自选 — 在上方输入代码添加</div></div>
+  </section>
+
+  <!-- ============ 模拟盘 ============ -->
+  <section id="tab-live" style="display:none">
+    <div class="ctrlbar">
+      <div class="ctrl"><span id="rtTimer2"></span></div>
+    </div>
+    <div class="card full" id="myAccount" style="margin-top:12px"><h2>我的模拟盘</h2><div class="empty">加载中…</div></div>
+    <div class="grid" style="margin-top:16px">
+      <div class="card">
+        <h2>实时行情 <span class="muted" style="font-size:11px;font-weight:400" id="quoteMode"></span></h2>
+        <table><thead><tr><th>标的</th><th class="num">现价</th><th class="num">涨跌幅</th></tr></thead>
+          <tbody id="quoteBody"><tr><td colspan="3" class="empty">加载中…</td></tr></tbody></table>
+      </div>
+      <div class="card">
+        <h2>官方演示账户</h2>
+        <div id="officialLine"><div class="empty">加载中…</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 回测报告 ============ -->
+  <section id="tab-bt" style="display:none">
+    <div class="grid">
+      <div class="card full">
+        <h2>回测 · 策略净值对比（期初 = 1）</h2>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+          <select id="btSel"></select>
+          <span class="muted" id="btMeta" style="font-size:12px"></span>
+          <span style="flex:1"></span>
+          <a class="dl" id="dlXlsx" href="files/report.xlsx">下载 Excel 报表</a>
+          <a class="dl" id="dlPdf" href="files/report.pdf">下载 PDF 研报</a>
+        </div>
+        <div id="btChart" class="chart" style="height:340px"></div>
+      </div>
+      <div class="card full">
+        <h2>回测 · 指标总览</h2>
+        <div style="overflow-x:auto"><table><thead id="btHead"></thead><tbody id="btTable"></tbody></table></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="note" id="feesNote"></div>
+  <footer>数据来源：东方财富公开行情接口 · 指标口径详见 PDF 研报 · 本页为策略研究工具，不构成投资建议，据此操作风险自负。</footer>
+</div>
+
+<script src="./app.js"></script>
+<script>
+const fmtPct = v => (v == null ? "—" : (v > 0 ? "+" : "") + (v * 100).toFixed(1) + "%");
+const cls = v => v == null ? "" : (v > 0 ? "up" : (v < 0 ? "down" : "muted"));
+const money = v => "¥" + Number(v).toLocaleString("zh-CN", {maximumFractionDigits: 2});
+
+let STATE = null, BT = null, btChart = null, accChart = null;
+let btInited = false, accInited = false;
+
+/* ---- Tab 切换 ---- */
+function switchTab(name){
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.dataset.tab === name));
+  document.getElementById("tab-watch").style.display = name === "watch" ? "" : "none";
+  document.getElementById("tab-live").style.display = name === "live" ? "" : "none";
+  document.getElementById("tab-bt").style.display = name === "bt" ? "" : "none";
+  if (name === "live"){
+    refreshMyAccount();         // 我的模拟盘：每次进入该页跟进到最新
+  }
+  if (name === "bt" && BT) initBt();
+}
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => switchTab(t.dataset.tab)));
+
+async function boot(){
+  try{
+    const [s, b] = await Promise.all([
+      fetch("./data/state.json?" + Date.now()).then(r => r.json()),
+      fetch("./data/backtest.json?" + Date.now()).then(r => r.json())
+    ]);
+    STATE = s; BT = b;
+    document.getElementById("snapTime").textContent = s.updated || "—";
+    renderQuotes(s.quotes, true); renderOfficial(); renderBacktestMeta(); renderBtTable();
+    document.getElementById("feesNote").textContent =
+      (b.fees_note || "") + "。回测区间 " + b.start + " 起，初始资金 " + money(b.capital) + "。";
+  }catch(e){
+    document.getElementById("liveText").textContent = "数据加载失败：" + e;
+    document.getElementById("liveDot").classList.add("off");
+  }
+  refreshLive();
+  setInterval(refreshLive, 30000);
+  initWatchTab();       // 自选决策台（app.js）
+  refreshMyAccount();   // 首屏就把 header KPI 初始化（官方/我的账户）
+}
+
+/* header KPI：优先显示"我的模拟盘"（app.js 在账户跟随后回调），否则显示官方演示账户 */
+function setHeaderKPI(label, equity, ret, cash){
+  document.getElementById("kLabel1").textContent = label;
+  const el = document.getElementById("kEquity");
+  el.textContent = money(equity);
+  const r = document.getElementById("kRet");
+  r.textContent = fmtPct(ret);
+  r.className = "v " + cls(ret);
+  document.getElementById("kCash").textContent = money(cash);
+}
+
+function renderOfficial(){
+  const a = STATE.account;
+  const flat = !a.positions || !a.positions.length;
+  document.getElementById("officialLine").innerHTML =
+    `<div class="sig"><div class="t">${money(a.equity)} <span class="${cls(a.total_return)}">${fmtPct(a.total_return)}</span>
+      <span class="muted" style="font-size:12.5px">（固定 ¥${Number(a.capital).toLocaleString()} 本金）</span></div>
+      <div class="why">${flat ? "当前空仓观望 —— 策略未给出买入信号，现金原封不动，所以这条线不会天天动；出信号后会自动开仓并记录。" : "持仓 " + a.positions.map(p => p.name).join("、")}</div>
+      <div class="why">跟进时间 ${STATE.updated} · 每个交易日小时级自动跟进 · 想看"会动的"请开上面「我的模拟盘」</div></div>`;
+}
+
+/* —— 实时行情：浏览器直连东财（30s 轮询），失败回落到部署快照 —— */
+async function refreshLive(){
+  const secids = (STATE.quotes || []).map(q => q.secid).filter(Boolean).join(",");
+  const dot = document.getElementById("liveDot");
+  const txt = document.getElementById("liveText");
+  if(!secids){ txt.textContent = "无可用行情代码"; dot.classList.add("off"); return; }
+  try{
+    const r = await fetch("https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&fields=f2,f3,f12,f14&secids=" + secids, {cache:"no-store"});
+    const j = await r.json();
+    const diff = (j.data && j.data.diff) || [];
+    const live = diff.map(d => ({symbol: d.f12, name: d.f14,
+      price: typeof d.f2 === "number" ? d.f2 : null,
+      pct_chg: typeof d.f3 === "number" ? d.f3 : null}));
+    if(live.length){
+      STATE.quotes = live;
+      renderQuotes(live, false);
+      txt.textContent = "实时行情 · 每 30 秒刷新 · " + new Date().toLocaleTimeString("zh-CN");
+      dot.classList.remove("off");
+    }
+  }catch(e){
+    txt.textContent = "实时接口不可达，显示部署时快照";
+    dot.classList.add("off");
+    renderQuotes(STATE.quotes, true);
+  }
+}
+
+function renderQuotes(list, snap){
+  const tb = document.getElementById("quoteBody");
+  document.getElementById("quoteMode").textContent = snap ? "（快照）" : "";
+  tb.innerHTML = list.map(q => {
+    const pct = q.pct_chg == null ? "—" : (q.pct_chg > 0 ? "+" : "") + q.pct_chg.toFixed(2) + "%";
+    const px = q.price == null ? "—" : Number(q.price).toLocaleString("zh-CN", {maximumFractionDigits: 4});
+    return `<tr><td>${q.name || ""} <span class="muted" style="font-size:12px">${q.symbol}</span></td>
+      <td class="num">${px}</td><td class="num ${cls(q.pct_chg)}">${pct}</td></tr>`;
+  }).join("");
+}
+
+/* ---- 回测报告 tab ---- */
+function renderBacktestMeta(){
+  const sel = document.getElementById("btSel");
+  sel.innerHTML = (BT.strategies || []).map((s, i) =>
+    `<option value="${i}">${s.name}（${s.market === "cn" ? "A股" : "美股"}）</option>`).join("");
+  sel.addEventListener("change", () => { if (btInited) drawBt(); renderBtMetaText(); });
+  renderBtMetaText();
+}
+function renderBtMetaText(){
+  const s = BT.strategies[+document.getElementById("btSel").value || 0];
+  const m = s.metrics;
+  document.getElementById("btMeta").textContent =
+    `总收益 ${fmtPct(m["总收益率"])} · 年化 ${fmtPct(m["年化收益率"])} · 最大回撤 ${(m["最大回撤"] * 100).toFixed(1)}% · 夏普 ${m["夏普比率"].toFixed(2)} · ${m["交易次数"]} 笔`;
+}
+function renderBtTable(){
+  const head = ["策略", "总收益", "年化", "最大回撤", "夏普", "胜率", "笔数", "基准"];
+  document.getElementById("btHead").innerHTML =
+    "<tr>" + head.map((h, i) => `<th${i ? ' class="num"' : ""}>${h}</th>`).join("") + "</tr>";
+  document.getElementById("btTable").innerHTML = (BT.strategies || []).map(s => {
+    const m = s.metrics;
+    const bench = s.benchmark_norm && s.benchmark_norm.length
+      ? (s.benchmark_norm[s.benchmark_norm.length - 1] - 1) : null;
+    return `<tr><td>${s.name}</td>
+      <td class="num ${cls(m["总收益率"])}"><b>${fmtPct(m["总收益率"])}</b></td>
+      <td class="num ${cls(m["年化收益率"])}">${fmtPct(m["年化收益率"])}</td>
+      <td class="num down">${(m["最大回撤"] * 100).toFixed(1)}%</td>
+      <td class="num">${m["夏普比率"].toFixed(2)}</td>
+      <td class="num">${m["胜率"] == null ? "—" : (m["胜率"] * 100).toFixed(0) + "%"}</td>
+      <td class="num">${m["交易次数"]}</td>
+      <td class="num ${cls(bench)}">${fmtPct(bench)}</td></tr>`;
+  }).join("");
+}
+function initBt(){
+  if (!btInited){
+    btChart = echarts.init(document.getElementById("btChart"));
+    drawBt();
+    btInited = true;
+  } else {
+    btChart.resize();
+  }
+}
+function drawBt(){
+  const s = BT.strategies[+document.getElementById("btSel").value || 0];
+  const series = [
+    {name: "策略净值", type: "line", data: s.equity_norm, showSymbol: false,
+     lineStyle: {width: 2.4, color: "#c8281e"}, itemStyle: {color: "#c8281e"}},
+  ];
+  if(s.benchmark_norm && s.benchmark_norm.length){
+    series.push({name: "基准(买入持有)", type: "line", data: s.benchmark_norm, showSymbol: false,
+      lineStyle: {width: 1.4, color: "#8a97a5"}, itemStyle: {color: "#8a97a5"}});
+  }
+  btChart.setOption({
+    grid: {left: 52, right: 20, top: 34, bottom: 46},
+    tooltip: {trigger: "axis", valueFormatter: v => v.toFixed(3)},
+    legend: {top: 2, textStyle: {fontSize: 12}},
+    xAxis: {type: "category", data: s.dates,
+      axisLabel: {fontSize: 11, formatter: v => v.slice(0, 7)}},
+    yAxis: {type: "value", scale: true, axisLabel: {fontSize: 11}},
+    series
+  }, true);
+}
+boot();
+</script>
+</body>
+</html>
