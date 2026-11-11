@@ -1,0 +1,29 @@
+{
+  "backtest": {
+    "start": "2018-01-01",
+    "capital": 100000,
+    "benchmarks": { "cn": "1.000300", "us": "107.SPY" },
+    "strategies": [
+      { "name": "双均线趋势·沪深300ETF", "type": "dual_ma", "market": "cn", "universe": ["510300"], "params": { "fast": 10, "slow": 30 } },
+      { "name": "动量轮动·ETF池", "type": "momentum", "market": "cn", "universe": ["510300", "510500", "159915", "518880"], "params": { "lookback": 20, "top_n": 1, "min_momentum": 0.0 } },
+      { "name": "均值回归·RSI沪深300ETF", "type": "mean_reversion", "market": "cn", "universe": ["510300"], "params": { "rsi_period": 14, "buy_th": 30, "sell_th": 70 } },
+      { "name": "网格交易·沪深300ETF", "type": "grid", "market": "cn", "universe": ["510300"], "params": { "step": 0.03, "levels": 6 } },
+      { "name": "双均线趋势·SPY", "type": "dual_ma", "market": "us", "universe": ["SPY"], "params": { "fast": 10, "slow": 30 } },
+      { "name": "动量轮动·SPY/QQQ", "type": "momentum", "market": "us", "universe": ["SPY", "QQQ"], "params": { "lookback": 20, "top_n": 1, "min_momentum": 0.0 } }
+    ]
+  },
+  "fees": {
+    "cn": { "buy_commission_bps": 0.5, "sell_commission_bps": 0.5, "sell_tax_bps": 0, "min_commission": 0.5, "slippage_bps": 5, "lot": 100 },
+    "us": { "buy_commission_bps": 0, "sell_commission_bps": 0, "sell_tax_bps": 0, "min_commission": 0, "slippage_bps": 2, "lot": 1 }
+  },
+  "monitor": {
+    "watchlist_cn": ["510300", "510500", "159915", "518880", "600519"],
+    "watchlist_us": ["SPY", "QQQ"],
+    "strategies": [
+      { "name": "双均线·510300", "type": "dual_ma", "market": "cn", "universe": ["510300"], "params": { "fast": 10, "slow": 30 } },
+      { "name": "动量轮动·ETF池", "type": "momentum", "market": "cn", "universe": ["510300", "510500", "159915", "518880"], "params": { "lookback": 20, "top_n": 1, "min_momentum": 0.0 } },
+      { "name": "双均线·SPY", "type": "dual_ma", "market": "us", "universe": ["SPY"], "params": { "fast": 10, "slow": 30 } }
+    ],
+    "loop_seconds": 60
+  }
+}
