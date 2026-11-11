@@ -25,6 +25,7 @@ jobs:
       - name: 更新行情/信号/模拟盘
         working-directory: src
         run: python run_monitor.py --once
+        continue-on-error: true   # 接口偶发拦截时保留旧数据继续发布
       - name: 重跑回测并生成报告
         working-directory: src
         run: python run_backtest.py
