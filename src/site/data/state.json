@@ -1,50 +1,50 @@
 {
- "updated": "2026-11-26 16:58:55",
+ "updated": "2026-11-27 17:12:19",
  "quotes": [
   {
    "symbol": "510300",
    "secid": "1.510300",
    "name": "沪深300ETF华泰柏瑞",
-   "price": 3.959,
-   "pct_chg": -0.28,
-   "prev_close": 3.97,
-   "time": "2026-11-26 16:58:54"
+   "price": 4.162,
+   "pct_chg": 5.13,
+   "prev_close": 3.959,
+   "time": "2026-11-27 17:12:17"
   },
   {
    "symbol": "510500",
    "secid": "1.510500",
    "name": "中证500ETF南方",
-   "price": 5.888,
-   "pct_chg": -0.57,
-   "prev_close": 5.922,
-   "time": "2026-11-26 16:58:54"
+   "price": 6.404,
+   "pct_chg": 8.76,
+   "prev_close": 5.888,
+   "time": "2026-11-27 17:12:17"
   },
   {
    "symbol": "159915",
    "secid": "0.159915",
    "name": "创业板ETF易方达",
-   "price": 2.217,
-   "pct_chg": 0.82,
-   "prev_close": 2.199,
-   "time": "2026-11-26 16:58:54"
+   "price": 2.471,
+   "pct_chg": 11.46,
+   "prev_close": 2.217,
+   "time": "2026-11-27 17:12:17"
   },
   {
    "symbol": "518880",
    "secid": "1.518880",
    "name": "黄金ETF华安",
-   "price": 7.27,
-   "pct_chg": 1.41,
-   "prev_close": 7.169,
-   "time": "2026-11-26 16:58:54"
+   "price": 7.441,
+   "pct_chg": 2.35,
+   "prev_close": 7.27,
+   "time": "2026-11-27 17:12:17"
   },
   {
    "symbol": "600519",
    "secid": "1.600519",
    "name": "贵州茅台",
-   "price": 1469.0,
-   "pct_chg": -0.4,
-   "prev_close": 1474.84,
-   "time": "2026-11-26 16:58:54"
+   "price": 1472.36,
+   "pct_chg": 0.23,
+   "prev_close": 1469.0,
+   "time": "2026-11-27 17:12:17"
   },
   {
    "symbol": "SPY",
@@ -53,7 +53,7 @@
    "price": 716.7,
    "pct_chg": -0.29,
    "prev_close": 718.78,
-   "time": "2026-11-26 16:58:54"
+   "time": "2026-11-27 17:12:17"
   },
   {
    "symbol": "QQQ",
@@ -62,7 +62,7 @@
    "price": 633.93,
    "pct_chg": -0.65,
    "prev_close": 638.1,
-   "time": "2026-11-26 16:58:54"
+   "time": "2026-11-27 17:12:17"
   }
  ],
  "strategies": [
@@ -71,12 +71,14 @@
    "target": {
     "510300": 0.0
    },
-   "reason": "MA10=4.030 ↓ MA30=4.110"
+   "reason": "MA10=4.038 ↓ MA30=4.107"
   },
   {
    "name": "动量轮动·ETF池",
-   "target": {},
-   "reason": "池内标的动量全部走弱，空仓回避"
+   "target": {
+    "510300": 1.0
+   },
+   "reason": "动量最强: 510300 近20日 +2.4%"
   },
   {
    "name": "双均线·SPY",
@@ -88,10 +90,20 @@
  ],
  "account": {
   "capital": 100000.0,
-  "cash": 100000.0,
-  "equity": 100000.0,
-  "total_return": 0.0,
-  "positions": [],
+  "cash": 107.01,
+  "equity": 99995.01,
+  "total_return": -0.0,
+  "positions": [
+   {
+    "symbol": "510300",
+    "name": "沪深300ETF华泰柏瑞",
+    "shares": 24000,
+    "avg_cost": 4.162,
+    "price": 4.162,
+    "value": 99888.0,
+    "pct": 99.9
+   }
+  ],
   "equity_history": [
    {
     "date": "2026-11-11",
@@ -144,9 +156,39 @@
    {
     "date": "2026-11-26",
     "equity": 100000.0
+   },
+   {
+    "date": "2026-11-27",
+    "equity": 99995.01
    }
   ]
  },
- "signals_today": [],
- "signals_recent": []
+ "signals_today": [
+  {
+   "side": "买入",
+   "symbol": "510300",
+   "name": "沪深300ETF华泰柏瑞",
+   "shares": 24000,
+   "price": 4.162,
+   "value": 99888.0,
+   "fee": 4.99,
+   "strategy": "动量轮动·ETF池",
+   "reason": "动量最强: 510300 近20日 +2.4%",
+   "time": "2026-11-27 17:12:18"
+  }
+ ],
+ "signals_recent": [
+  {
+   "side": "买入",
+   "symbol": "510300",
+   "name": "沪深300ETF华泰柏瑞",
+   "shares": 24000,
+   "price": 4.162,
+   "value": 99888.0,
+   "fee": 4.99,
+   "strategy": "动量轮动·ETF池",
+   "reason": "动量最强: 510300 近20日 +2.4%",
+   "time": "2026-11-27 17:12:18"
+  }
+ ]
 }
